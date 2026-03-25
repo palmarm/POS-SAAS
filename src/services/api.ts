@@ -101,4 +101,11 @@ export const subscriptionAPI = {
   downloadInvoice: (id: string) => API.get(`/subscription/invoices/${id}/download`, { responseType: 'blob' }),
 };
 
+// Invoice API calls
+export const invoiceAPI = {
+  getAll: () => API.get('/invoices'),
+  getOne: (invoiceNumber: string) => API.get(`/invoices/${invoiceNumber}`),
+  download: (invoiceNumber: string) => API.get(`/invoices/${invoiceNumber}/download`, { responseType: 'blob' }),
+};
+
 export default API;
