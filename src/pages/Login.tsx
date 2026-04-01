@@ -11,7 +11,7 @@ export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, business } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -41,7 +41,7 @@ export const Login: React.FC = () => {
       <Card className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary-600">POS System</h1>
-          <p className="text-secondary-500 mt-2">Sign in to your account</p>
+          <p className="text-secondary-500 mt-2">Sign in to your business account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -106,7 +106,7 @@ export const Login: React.FC = () => {
         {/* Sign Up Link */}
         <div className="mt-6 text-center">
           <p className="text-sm text-secondary-600">
-            Don't have an account?{' '}
+            Don't have a business account?{' '}
             <Link to="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
               Start free trial
             </Link>

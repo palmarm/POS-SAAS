@@ -21,6 +21,7 @@ import { PricingPlans } from './pages/subscription/PricingPlans';
 import { SubscriptionDashboard } from './pages/subscription/SubscriptionDashboard';
 import { PaymentScreen } from './pages/subscription/PaymentScreen';
 import { InvoiceHistory } from './pages/subscription/InvoiceHistory';
+import { UserManagement } from './pages/users/UserManagement';
 
 function App() {
   return (
@@ -68,6 +69,7 @@ function App() {
                         <Route path="/subscription/dashboard" element={<SubscriptionDashboard />} />
                         <Route path="/subscription/checkout" element={<PaymentScreen />} />
                         <Route path="/subscription/invoices" element={<InvoiceHistory />} />
+                        <Route path="/users" element={<UserManagement />} />
                       </Routes>
                     </main>
                   </div>

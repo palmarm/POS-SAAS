@@ -7,13 +7,14 @@ import {
   ArrowRightOnRectangleIcon,
   Cog6ToothIcon,
   CreditCardIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  BuildingStorefrontIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../hooks/useToast';
 
 export const Navbar: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, business, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -60,6 +61,10 @@ export const Navbar: React.FC = () => {
 
       {/* Right section */}
       <div className="flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-secondary-100 rounded-lg">
+        <BuildingStorefrontIcon className="w-4 h-4 text-secondary-500" />
+         <span className="text-sm font-medium text-secondary-700">{business?.name}</span>
+        </div>
         {/* Notifications */}
         <button className="p-2 hover:bg-secondary-100 rounded-lg transition-colors relative">
           <BellIcon className="w-5 h-5 text-secondary-600" />
