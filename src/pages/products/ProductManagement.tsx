@@ -5,20 +5,31 @@ import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { useToast } from '../../hooks/useToast';
+import { productAPI, categoryAPI } from '../../services/api';
+import { error } from 'console';
 
 interface Product {
-  id: string;
+  id: number;
   name: string;
   description: string;
   price: number;
-  category: string;
+  category_id: number;
+  category_name: string;
   stock: number;
-  image?: string;
-  createdAt: Date;
+  sku?: string;
+  image_url?: string;
+  created_at: string;
+} 
+
+interface Category {
+  id: number;
+  name: string;
+  description?: string;
 }
 
 export const ProductManagement: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,46 +38,54 @@ export const ProductManagement: React.FC = () => {
     name: '',
     description: '',
     price: 0,
-    category: '',
+    category_id: 0,
     stock: 0,
-    image: ''
+    sku: '',
+    image_url: ''
   });
   const [loading, setLoading] = useState(false);
   const { showToast } = useToast();
 
-  // Categories (would come from API)
-  const categories = ['Electronics', 'Clothing', 'Food', 'Accessories', 'Furniture'];
-
   // Fetch products (simulated)
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const mockProducts: Product[] = [
-        { id: '1', name: 'Wireless Mouse', description: 'Ergonomic wireless mouse', price: 29.99, category: 'Electronics', stock: 15, createdAt: new Date() },
-        { id: '2', name: 'Mechanical Keyboard', description: 'RGB mechanical keyboard', price: 89.99, category: 'Electronics', stock: 8, createdAt: new Date() },
-        { id: '3', name: 'Cotton T-Shirt', description: '100% cotton t-shirt', price: 19.99, category: 'Clothing', stock: 25, createdAt: new Date() },
-      ];
-      setProducts(mockProducts);
+      const response = await productAPI.getAll();
+      setProducts(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch products:', error);
+      showToast(error.response?.data?.message || 'Failed to fetch products', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const response = await categoryAPI.getAll();
+      setCategories(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch categories:', error);
+      showToast(error.response?.data?.message || 'Failed to fetch categories', 'error');
+    }
+  };
+
+  
+
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || product.category_id === parseInt(selectedCategory);
     return matchesSearch && matchesCategory;
   });
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.price || !formData.category) {
+    if (!formData.name || !formData.price || !formData.category_id) {
       showToast('Please fill all required fields', 'error');
       return;
     }
@@ -74,23 +93,28 @@ export const ProductManagement: React.FC = () => {
     setLoading(true);
     try {
       if (editingProduct) {
-        // Update product
-        setProducts(prev => prev.map(p => 
-          p.id === editingProduct.id 
-            ? { ...p, ...formData, price: Number(formData.price), stock: Number(formData.stock) }
-            : p
-        ));
+        // Update existing product
+        await productAPI.update(editingProduct.id, {
+          name: formData.name,
+          description: formData.description,
+          price: formData.price,
+          category_id: formData.category_id,
+          stock: formData.stock,
+          sku: formData.sku,
+          image_url: formData.image_url
+        });
         showToast('Product updated successfully', 'success');
       } else {
-        // Create product
-        const newProduct: Product = {
-          id: Date.now().toString(),
-          ...formData,
-          price: Number(formData.price),
-          stock: Number(formData.stock),
-          createdAt: new Date()
-        };
-        setProducts(prev => [...prev, newProduct]);
+        // Create new product
+        await productAPI.create({
+          name: formData.name,
+          description: formData.description,
+          price: formData.price,
+          category_id: formData.category_id,
+          stock: formData.stock,
+          sku: formData.sku,
+          image_url: formData.image_url
+        });
         showToast('Product created successfully', 'success');
       }
       setIsModalOpen(false);
@@ -100,20 +124,31 @@ export const ProductManagement: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       setLoading(true);
       try {
-        setProducts(prev => prev.filter(p => p.id !== id));
+        await productAPI.delete(id);
         showToast('Product deleted successfully', 'success');
+        fetchProducts(); // Refresh product list after deletion
+      } catch (error: any) {
+        showToast(error.response?.data?.message || 'Failed to delete product', 'error');
       } finally {
         setLoading(false);
       }
     }
   };
 
-  const resetForm = () => {
-    setFormData({ name: '', description: '', price: 0, category: '', stock: 0, image: '' });
+  const resetForm = () => { // Clear form data and reset editing state
+    setFormData({
+      name: '',
+      description: '',
+      price: 0,
+      category_id: 0,
+      stock: 0,
+      sku: '',
+      image_url: ''
+    });
     setEditingProduct(null);
   };
 
@@ -121,13 +156,18 @@ export const ProductManagement: React.FC = () => {
     setEditingProduct(product);
     setFormData({
       name: product.name,
-      description: product.description,
+      description: product.description || '',
       price: product.price,
-      category: product.category,
+      category_id: product.category_id,
       stock: product.stock,
-      image: product.image || ''
+      sku: product.sku || '',
+      image_url: product.image_url || ''
     });
     setIsModalOpen(true);
+  };
+  const getCategoryName = (category_id: number) => {
+    const category = categories.find(c => c.id === category_id);
+    return category ?.name || 'Unknown';
   };
 
   return (
@@ -163,7 +203,7 @@ export const ProductManagement: React.FC = () => {
               >
                 <option value="all">All Categories</option>
                 {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             </div>
@@ -189,18 +229,23 @@ export const ProductManagement: React.FC = () => {
                   <tr key={product.id} className="hover:bg-secondary-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="w-10 h-10 bg-secondary-100 rounded-lg flex items-center justify-center">
-                        <span className="text-xl">📦</span>
+                        {product.image_url ? (
+                          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover rounded-lg" />
+                        ) : (
+                          <span className="text-xl">📦</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div>
                         <p className="font-medium text-secondary-900">{product.name}</p>
-                        <p className="text-sm text-secondary-500">{product.description}</p>
+                        <p className="text-sm text-secondary-500">{product.description?.substring(0, 50)}...</p>
                       </div>
                     </td>
+                    <td className="px-6 py-4 text-secondary-600">{product.sku || '-'}</td>
                     <td className="px-6 py-4">
                       <span className="px-2 py-1 bg-secondary-100 rounded-full text-xs text-secondary-600">
-                        {product.category}
+                        {getCategoryName(product.category_id)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right font-medium">${product.price.toFixed(2)}</td>
@@ -257,6 +302,12 @@ export const ProductManagement: React.FC = () => {
               placeholder="Enter product name"
             />
             <Input
+              label="SKU"
+              value={formData.sku}
+              onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+              placeholder="Enter SKU (optional)"
+            />
+            <Input
               label="Description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -283,15 +334,21 @@ export const ProductManagement: React.FC = () => {
               <label className="block text-sm font-medium text-secondary-700 mb-1">Category *</label>
               <select
                 className="w-full rounded-lg border border-secondary-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                value={formData.category_id}
+                onChange={(e) => setFormData({ ...formData, category_id: parseInt(e.target.value) })}
               >
                 <option value="">Select category</option>
                 {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             </div>
+            <Input
+              label="Image URL"
+              value={formData.image_url}
+              onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+              placeholder="Enter image URL (optional)"
+            />
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
               <Button onClick={handleSubmit} loading={loading}>

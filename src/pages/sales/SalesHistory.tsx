@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
+import { productAPI, saleAPI } from '../../services/api';
 
 interface Sale {
   id: string;
