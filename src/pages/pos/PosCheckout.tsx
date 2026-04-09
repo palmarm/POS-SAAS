@@ -1,76 +1,198 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MagnifyingGlassIcon, XMarkIcon, PlusIcon, MinusIcon } from '@heroicons/react/24/outline';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
+import { useToast } from '../../hooks/useToast';
+import { productAPI, saleAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { set } from 'react-hook-form';
 
 interface CartItem {
-  id: string;
+  id: number;
   name: string;
   price: number;
   quantity: number;
-  image?: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  category: string;
   stock: number;
   image?: string;
 }
 
+interface Product {
+  id: number;
+  name: string;
+  price: number;
+  category_id: number;
+  category_name?: string;
+  stock: number;
+  sku?: string;
+  image_url?: string;
+  description?: string;
+}
+
 export const PosCheckout: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPayment, setSelectedPayment] = useState<'cash' | 'card' | 'mobile' | 'credit'>('cash');
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [discount, setDiscount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const { showToast } = useToast();
+  const { user } = useAuth();
 
-  // Sample products (would come from API)
-  const products: Product[] = [
-    { id: '1', name: 'Wireless Mouse', price: 29.99, category: 'Electronics', stock: 15 },
-    { id: '2', name: 'Mechanical Keyboard', price: 89.99, category: 'Electronics', stock: 8 },
-    { id: '3', name: 'USB-C Cable', price: 12.99, category: 'Accessories', stock: 50 },
-    { id: '4', name: 'Monitor Stand', price: 45.99, category: 'Furniture', stock: 12 },
-  ];
+  // Fetch products from API
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const response = await productAPI.getAll();
+      setProducts(response.data || []);
+    } catch (error: any) {
+      console.error('Error fetching products:', error);
+      showToast(error.response?.data?.message || 'Failed to load products', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const addToCart = (product: Product) => {
+    if (product.stock === 0) {
+      showToast('Product is out of stock', 'warning');
+      return;
+    }
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
+        if (existing.quantity >= product.stock) {
+          showToast(`Only ${product.stock} items in stock`, 'warning');
+          return prev;
+        }
         return prev.map(item =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...prev, { ...product, quantity: 1 }];
+      return [...prev, {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: 1,
+        stock: product.stock
+      }];
     });
   };
 
-  const updateQuantity = (id: string, delta: number) => {
+  const updateQuantity = (id: number, delta: number) => {
     setCart(prev =>
-      prev.map(item =>
-        item.id === id
-          ? { ...item, quantity: Math.max(1, item.quantity + delta) }
-          : item
-      )
-    );
+      prev.map(item => {
+        if (item.id === id) {
+          const newQuantity = item.quantity + delta;
+          if (newQuantity < 1) return item;
+          if (newQuantity > item.stock) {
+            showToast(`Only ${item.stock} items in stock`, 'warning');
+            return item;
+          }
+          return { ...item, quantity: newQuantity };
+        }
+        return item;
+      })
+    );     
   };
 
-  const removeFromCart = (id: string) => {
+  const removeFromCart = (id: number) => {
     setCart(prev => prev.filter(item => item.id !== id));
+  };
+
+  const clearCart = () => {
+    if (cart.length > 0 && window.confirm('Are you sure you want to clear the cart?')) {
+      setCart([]);
+      setDiscount(0);
+      showToast('Cart cleared', 'info');
+    }
+  };
+
+  const applyDiscount = () => {
+    if (discountAmount > 0 && discountAmount <= subtotal) {
+      setDiscount(discountAmount);
+      setShowDiscountModal(false);
+      showToast(`Discount of $${discountAmount} applied`, 'success');
+    } else if (discountAmount > subtotal) {
+      showToast('Discount cannot exceed subtotal', 'error');
+    }  
+  };
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) {
+      showToast('Cart is empty', 'warning');
+      return;
+    }
+    if (!selectedPayment) {
+      showToast('Please select a payment method', 'warning');
+      return;
+    }
+    setLoading(true);
+    try {
+      const saleData = {
+        items: cart.map(item => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          price: item.price,
+          total: item.price * item.quantity
+        })),
+        subtotal: subtotal,
+        tax: tax,
+        discount: discount,
+        total: total,
+        payment_method: selectedPayment,
+        payment_details: {
+          method: selectedPayment,
+          amount: total,
+        },
+        notes: `Discount applied: $${discount}`
+      };
+      // Call API to create sale
+      const response = await saleAPI.create(saleData);
+
+      if (response.data.success) {
+        showToast('Sale completed successfully', 'success');
+        // Print receipt logic can go here
+        setCart([]);
+        setDiscount(0);
+        // Refresh products to update stock levels
+        await fetchProducts();
+      }
+    } catch (error: any) {
+      console.error('Error creating sale:', error);
+      showToast(error.response?.data?.message || 'Sale Failed', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const tax = subtotal * 0.1; // 10% tax
   const total = subtotal + tax - discount;
+
+  // Show loading state while fetching products
+  if (loading && products.length === 0) {
+    return (
+      <div className="h-screen pt-16 pl-[240px] bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-secondary-600">Loading products...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen pt-16 pl-[240px] bg-background">
@@ -84,12 +206,15 @@ export const PosCheckout: React.FC = () => {
                 <div className="flex-1">
                   <Input
                     icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-                    placeholder="Search products or scan barcode..."
+                    placeholder="Search products by name or SKU..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    autoFocus
                   />
                 </div>
-                <Button variant="secondary">Scan</Button>
+                <Button variant="secondary" onClick={() => fetchProducts()}>
+                  Refresh
+                  </Button>
               </div>
 
               {/* Product grid */}
@@ -102,13 +227,24 @@ export const PosCheckout: React.FC = () => {
                     disabled={product.stock === 0}
                   >
                     <div className="aspect-square bg-secondary-100 rounded-md mb-2 flex items-center justify-center">
-                      <span className="text-2xl">📦</span>
+                      {product.image_url ? (
+                        <img src={product.image_url} alt={product.name} className="w-12 h-12 object-cover" />
+                      ) : (
+                        <span className="text-2xl">📦</span>
+                      )}
                     </div>
                     <h3 className="font-medium text-secondary-900">{product.name}</h3>
-                    <p className="text-sm text-secondary-500">${product.price}</p>
-                    <p className="text-xs text-secondary-400 mt-1">Stock: {product.stock}</p>
+                    <p className="text-sm text-secondary-500">${product.price.toFixed(2)}</p>
+                    <p className="text-xs text-secondary-400 mt-1">
+                      Stock: {product.stock} {product.sku && `| SKU: ${product.sku}`}
+                      </p>
                   </button>
                 ))}
+                {filteredProducts.length === 0 && (
+                  <div className="col-span-3 text-center py-8 text-secondary-400">
+                    No products found
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -125,7 +261,7 @@ export const PosCheckout: React.FC = () => {
                 <div key={item.id} className="flex items-center gap-3 p-2 bg-secondary-50 rounded-lg">
                   <div className="flex-1">
                     <p className="font-medium text-secondary-900">{item.name}</p>
-                    <p className="text-sm text-secondary-500">${item.price}</p>
+                    <p className="text-sm text-secondary-500">${item.price.toFixed(2)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -138,6 +274,7 @@ export const PosCheckout: React.FC = () => {
                     <button
                       onClick={() => updateQuantity(item.id, 1)}
                       className="p-1 hover:bg-secondary-200 rounded"
+                      disabled={item.quantity >= item.stock}
                     >
                       <PlusIcon className="w-4 h-4" />
                     </button>
@@ -155,6 +292,7 @@ export const PosCheckout: React.FC = () => {
                 <div className="text-center py-8 text-secondary-400">
                   {/* <ShoppingCartIcon className="w-12 h-12 mx-auto mb-2" /> */}
                   <p>Cart is empty</p>
+                  <p className="text-sm mt-1">Click on products to add to cart</p>
                 </div>
               )}
             </div>
@@ -237,13 +375,35 @@ export const PosCheckout: React.FC = () => {
               size="lg"
               fullWidth
               className="mt-4"
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || loading}
+              onClick={handleCheckout}
+              loading={loading}
             >
               Complete Sale (${total.toFixed(2)})
             </Button>
           </Card>
         </div>
       </div>
+      {/* Discount Modal */}
+      {showDiscountModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold text-secondary-900 mb-4">Apply Discount</h3>
+            <Input
+              label="Discount Amount"
+              type="number"
+              step="0.01"
+              placeholder="Enter discount amount"
+              value={discountAmount}
+              onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <Button variant="ghost" onClick={() => setShowDiscountModal(false)}>Cancel</Button>
+              <Button onClick={applyDiscount}>Apply</Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
