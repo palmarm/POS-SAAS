@@ -13,6 +13,7 @@ import {
     BuildingStorefrontIcon
 } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
+import { useToast } from '../hooks/useToast';
 
 interface DashboardStats {
     totalProducts: number;
@@ -22,9 +23,28 @@ interface DashboardStats {
     monthlyRevenue: number;
     outstandingCredit: number;
 }
+interface Product {
+    id: number;
+    name: string;
+    stock: number;
+    min_stock: number;
+    price: number;
+}
+interface Customer {
+    id: number;
+    name: string;
+    outstanding_balance: number;
+}
+
+interface Sale {
+    id: number;
+    total: number;
+    created_at: string;
+}
 
 export const Dashboard: React.FC = () => {
     const { user, business, isAdmin, isManager } = useAuth();
+    const { showToast } = useToast();
     const [stats, setStats] = useState<DashboardStats>({
         totalProducts: 0,
         lowStock: 0,
@@ -34,7 +54,7 @@ export const Dashboard: React.FC = () => {
         outstandingCredit: 0,
     });
     const [loading, setLoading] = useState(true);
-    const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
+    const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
 
     useEffect(() => {
         fetchDashboardData();
@@ -43,31 +63,71 @@ export const Dashboard: React.FC = () => {
     const fetchDashboardData = async () => {
         setLoading(true);
         try {
-            // Fetch products
-            const productsRes = await productAPI.getAll();
-            const products = productsRes.data.data || [];
+            // Fetch products with error handling
+            let products: Product[] = [];
+            try {
+                const productsRes = await productAPI.getAll();
+                // Handle different response structures
+                if (productsRes.data && productsRes.data.data && Array.isArray(productsRes.data.data)) {
+                    products = productsRes.data.data;
+                } else if (productsRes.data && Array.isArray(productsRes.data)) {
+                    products = productsRes.data;
+                } else if (Array.isArray(productsRes.data)) {
+                    products = productsRes.data;
+                }
+                console.log('Products loaded:', products.length);
+            } catch (error) {
+                console.error('Failed to fetch products:', error);
+                showToast('Failed to load products data', 'error');
+            }
             
-            // Fetch customers
-            const customersRes = await customerAPI.getAll();
-            const customers = customersRes.data.data || [];
+            // Fetch customers with error handling
+            let customers: Customer[] = [];
+            try {
+                const customersRes = await customerAPI.getAll();
+                if (customersRes.data && customersRes.data.data && Array.isArray(customersRes.data.data)) {
+                    customers = customersRes.data.data;
+                } else if (customersRes.data && Array.isArray(customersRes.data)) {
+                    customers = customersRes.data;
+                }
+                console.log('Customers loaded:', customers.length);
+            } catch (error) {
+                console.error('Failed to fetch customers:', error);
+                showToast('Failed to load customers data', 'error');
+            }
             
-            // Fetch recent sales
-            const salesRes = await saleAPI.getAll();
-            const sales = salesRes.data.data || [];
+            // Fetch sales with error handling
+            let sales: Sale[] = [];
+            try {
+                const salesRes = await saleAPI.getAll();
+                if (salesRes.data && salesRes.data.data && Array.isArray(salesRes.data.data)) {
+                    sales = salesRes.data.data;
+                } else if (salesRes.data && Array.isArray(salesRes.data)) {
+                    sales = salesRes.data;
+                }
+                console.log('Sales loaded:', sales.length);
+            } catch (error) {
+                console.error('Failed to fetch sales:', error);
+                showToast('Failed to load sales data', 'error');
+            }
             
-            // Calculate stats
+            // Calculate stats safely
             const today = new Date().toISOString().split('T')[0];
             const todaySales = sales
-                .filter((s: any) => new Date(s.created_at).toISOString().split('T')[0] === today)
-                .reduce((sum: number, s: any) => sum + s.total, 0);
+                .filter((s: Sale) => new Date(s.created_at).toISOString().split('T')[0] === today)
+                .reduce((sum: number, s: Sale) => sum + (s.total || 0), 0);
             
             const thisMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
             const monthlyRevenue = sales
-                .filter((s: any) => new Date(s.created_at).getMonth() === thisMonth)
-                .reduce((sum: number, s: any) => sum + s.total, 0);
+                .filter((s: Sale) => {
+                    const saleDate = new Date(s.created_at);
+                    return saleDate.getMonth() === thisMonth && saleDate.getFullYear() === currentYear;
+                })
+                .reduce((sum: number, s: Sale) => sum + (s.total || 0), 0);
             
-            const outstandingCredit = customers.reduce((sum: number, c: any) => sum + (c.outstanding_balance || 0), 0);
-            const lowStock = products.filter((p: any) => p.stock <= (p.min_stock || 10)).length;
+            const outstandingCredit = customers.reduce((sum: number, c: Customer) => sum + (c.outstanding_balance || 0), 0);
+            const lowStock = products.filter((p: Product) => (p.stock || 0) <= (p.min_stock || 10)).length;
             
             setStats({
                 totalProducts: products.length,
@@ -78,36 +138,43 @@ export const Dashboard: React.FC = () => {
                 outstandingCredit,
             });
             
-            setLowStockProducts(products.filter((p: any) => p.stock <= (p.min_stock || 10)).slice(0, 5));
+            setLowStockProducts(products.filter((p: Product) => (p.stock || 0) <= (p.min_stock || 10)).slice(0, 5));
+            
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
+            showToast('Failed to load dashboard data', 'error');
         } finally {
             setLoading(false);
         }
     };
 
+
     const statCards = [
-        {
+         {
             title: 'Today\'s Sales',
-            value: `$${stats.todaySales.toLocaleString()}`,
+            value: `$${stats.todaySales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
             icon: CurrencyDollarIcon,
             color: 'bg-success-500',
         },
         {
             title: 'Monthly Revenue',
-            value: `$${stats.monthlyRevenue.toLocaleString()}`,
+            value: `$${stats.monthlyRevenue.toLocaleString(
+                undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+            )}`,
             icon: ArrowTrendingUpIcon,
             color: 'bg-primary-500',
         },
         {
             title: 'Total Products',
-            value: stats.totalProducts,
+            value: stats.totalProducts.toLocaleString(),
             icon: CubeIcon,
             color: 'bg-blue-500',
         },
         {
             title: 'Outstanding Credit',
-            value: `$${stats.outstandingCredit.toLocaleString()}`,
+            value: `$${stats.outstandingCredit.toLocaleString(
+                undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+            )}`,
             icon: UsersIcon,
             color: 'bg-warning-500',
         },
@@ -128,7 +195,7 @@ export const Dashboard: React.FC = () => {
                 <div className="flex items-center gap-3 mb-2">
                     <BuildingStorefrontIcon className="w-8 h-8 text-primary-600" />
                     <h1 className="text-2xl font-bold text-secondary-900">
-                        {business?.name}
+                        {business?.name || 'My Business'}
                     </h1>
                     {business?.subscription && (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -141,7 +208,7 @@ export const Dashboard: React.FC = () => {
                     )}
                 </div>
                 <p className="text-secondary-500">
-                    Welcome back, {user?.name}! Here's what's happening with your business today.
+                    Welcome back, {user?.name || 'User'}! Here's what's happening with your business today.
                 </p>
             </div>
 

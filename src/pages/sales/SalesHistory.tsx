@@ -47,7 +47,7 @@ export const SalesHistory: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const { showToast } = useToast();
-  const { user } = useAuth();
+  const { business } = useAuth();
 
   useEffect(() => {
     fetchSales();
@@ -375,7 +375,7 @@ export const SalesHistory: React.FC = () => {
             <div className="space-y-4">
               {/* Receipt Content */}
               <div className="text-center border-b border-secondary-200 pb-4">
-                <h2 className="text-xl font-bold text-secondary-900"> POS System</h2>
+                <h2 className="text-xl font-bold text-secondary-900">{business?.name || 'POS System'}</h2>
                 <p className="text-sm text-secondary-500">123 Main Street, City</p>
                 <p className="text-sm text-secondary-500">Tel: (555) 123-4567</p>
                 <p className="text-sm text-secondary-500">Tax ID: 123456789</p>

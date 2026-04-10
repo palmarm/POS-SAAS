@@ -53,17 +53,36 @@ export const ProductManagement: React.FC = () => {
   }, []);
 
   const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const response = await productAPI.getAll();
-      setProducts(response.data.data || []);
-    } catch (error: any) {
-      console.error('Failed to fetch products:', error);
-      showToast(error.response?.data?.message || 'Failed to fetch products', 'error');
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    const response = await productAPI.getAll();
+    
+    // Handle different response structures
+    let productsData = [];
+    if (response.data && response.data.data) {
+      productsData = response.data.data;
+    } else if (response.data && Array.isArray(response.data)) {
+      productsData = response.data;
+    } else if (Array.isArray(response.data)) {
+      productsData = response.data;
+    } else {
+      productsData = [];
     }
-  };
+    
+    if (!Array.isArray(productsData)) {
+      console.error('Products data is not an array:', productsData);
+      productsData = [];
+    }
+    
+    setProducts(productsData);
+  } catch (error: any) {
+    console.error('Failed to fetch products:', error);
+    showToast(error.response?.data?.message || 'Failed to fetch products', 'error');
+    setProducts([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchCategories = async () => {
     try {
@@ -90,8 +109,19 @@ export const ProductManagement: React.FC = () => {
       return;
     }
 
+    if (formData.price <= 0) {
+    showToast('Price must be greater than 0', 'error');
+    return;
+  }
+
+  if (formData.stock < 0) {
+    showToast('Stock cannot be negative', 'error');
+    return;
+  }
+
     setLoading(true);
     try {
+      
       if (editingProduct) {
         // Update existing product
         await productAPI.update(editingProduct.id, {

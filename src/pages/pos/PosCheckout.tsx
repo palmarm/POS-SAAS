@@ -46,23 +46,48 @@ export const PosCheckout: React.FC = () => {
     fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
+   const fetchProducts = async () => {
     setLoading(true);
     try {
       const response = await productAPI.getAll();
-      setProducts(response.data || []);
+      
+      // Handle different response structures
+      let productsData = [];
+      if (response.data && response.data.data) {
+        // Response format: { success: true, data: [...] }
+        productsData = response.data.data;
+      } else if (response.data && Array.isArray(response.data)) {
+        // Response format: direct array
+        productsData = response.data;
+      } else if (Array.isArray(response.data)) {
+        productsData = response.data;
+      } else {
+        productsData = [];
+      }
+      
+      // Ensure productsData is an array
+      if (!Array.isArray(productsData)) {
+        console.error('Products data is not an array:', productsData);
+        productsData = [];
+      }
+      
+      setProducts(productsData);
     } catch (error: any) {
-      console.error('Error fetching products:', error);
+      console.error('Failed to fetch products:', error);
       showToast(error.response?.data?.message || 'Failed to load products', 'error');
+      setProducts([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+
+  const filteredProducts = Array.isArray(products) 
+    ? products.filter(p =>
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    : [];
 
   const addToCart = (product: Product) => {
     if (product.stock === 0) {
