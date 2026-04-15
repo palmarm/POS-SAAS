@@ -46,39 +46,47 @@ export const PosCheckout: React.FC = () => {
     fetchProducts();
   }, []);
 
-   const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const response = await productAPI.getAll();
-      
-      // Handle different response structures
-      let productsData = [];
-      if (response.data && response.data.data) {
-        // Response format: { success: true, data: [...] }
-        productsData = response.data.data;
-      } else if (response.data && Array.isArray(response.data)) {
-        // Response format: direct array
-        productsData = response.data;
-      } else if (Array.isArray(response.data)) {
-        productsData = response.data;
-      } else {
-        productsData = [];
-      }
-      
-      // Ensure productsData is an array
-      if (!Array.isArray(productsData)) {
-        console.error('Products data is not an array:', productsData);
-        productsData = [];
-      }
-      
-      setProducts(productsData);
-    } catch (error: any) {
-      console.error('Failed to fetch products:', error);
-      showToast(error.response?.data?.message || 'Failed to load products', 'error');
-      setProducts([]); // Set empty array on error
-    } finally {
-      setLoading(false);
-    }
+  const normalizeProduct = (product: any): Product => ({
+    id: Number(product.id) || 0,
+    name: product.name ?? '',
+    price: Number(product.price) || 0, // ✅ Ensures price is a number
+    category_id: Number(product.category_id) || 0,
+    category_name: product.category_name ?? '',
+    stock: Number(product.stock ?? product.stock_quantity) || 0,
+    sku: product.sku ?? '',
+    image_url: product.image_url ?? '',
+    description: product.description ?? '',
+  });
+
+  const fetchProducts = async () => {
+     setLoading(true);
+       try {
+         const response = await productAPI.getAll();
+         
+         let productsData:any[] = [];
+         
+         // Handle different response structures
+         if (response.data && response.data.data) {
+           productsData = response.data.data;
+         } else if (response.data && Array.isArray(response.data)) {
+           productsData = response.data;
+         } else if (Array.isArray(response.data)) {
+           productsData = response.data;
+         } else {
+           console.error('Unexpected products response:', response.data);
+           productsData = [];
+         }
+         // Normalize products to ensure consistent structure
+         const normalizedProducts: Product[] = productsData.map(normalizeProduct);
+   
+         setProducts(normalizedProducts);
+       } catch (error: any) {
+         console.error('Failed to fetch products:', error);
+         showToast(error.response?.data?.message || 'Failed to fetch products', 'error');
+         setProducts([]);
+       } finally {
+         setLoading(false);
+       }
   };
 
 
@@ -109,9 +117,11 @@ export const PosCheckout: React.FC = () => {
       return [...prev, {
         id: product.id,
         name: product.name,
-        price: product.price,
+        price: Number(product.price),
         quantity: 1,
-        stock: product.stock
+        stock: product.stock,
+        image: product.image_url
+
       }];
     });
   };
@@ -160,30 +170,30 @@ export const PosCheckout: React.FC = () => {
       showToast('Cart is empty', 'warning');
       return;
     }
-    if (!selectedPayment) {
-      showToast('Please select a payment method', 'warning');
-      return;
-    }
+
     setLoading(true);
     try {
       const saleData = {
+        customer_id: null, // Can be extended to select customer
         items: cart.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
-          price: item.price,
-          total: item.price * item.quantity
+          price: Number(item.price),
+          total: Number(item.price) * item.quantity
         })),
-        subtotal: subtotal,
-        tax: tax,
-        discount: discount,
-        total: total,
-        payment_method: selectedPayment,
+        subtotal: Number(subtotal),
+        tax: Number(tax),
+        discount: Number(discount),
+        total: Number(total),
+        payment_type: selectedPayment,
         payment_details: {
           method: selectedPayment,
-          amount: total,
+          amount: Number(total),
         },
-        notes: `Discount applied: $${discount}`
+        notes: `Discount applied: $${discount}`,
       };
+      console.log('Submitting sale data:', saleData);
+
       // Call API to create sale
       const response = await saleAPI.create(saleData);
 
@@ -202,6 +212,12 @@ export const PosCheckout: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Format currency
+  const currencyFormatter = new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency: 'KES',
+  });
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const tax = subtotal * 0.1; // 10% tax
@@ -259,7 +275,7 @@ export const PosCheckout: React.FC = () => {
                       )}
                     </div>
                     <h3 className="font-medium text-secondary-900">{product.name}</h3>
-                    <p className="text-sm text-secondary-500">${product.price.toFixed(2)}</p>
+                    <p className="text-sm text-secondary-500">$ {currencyFormatter.format(Number(product.price))}</p>
                     <p className="text-xs text-secondary-400 mt-1">
                       Stock: {product.stock} {product.sku && `| SKU: ${product.sku}`}
                       </p>
@@ -286,7 +302,7 @@ export const PosCheckout: React.FC = () => {
                 <div key={item.id} className="flex items-center gap-3 p-2 bg-secondary-50 rounded-lg">
                   <div className="flex-1">
                     <p className="font-medium text-secondary-900">{item.name}</p>
-                    <p className="text-sm text-secondary-500">${item.price.toFixed(2)}</p>
+                    <p className="text-sm text-secondary-500">${(Number(item.price)).toFixed(2)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -326,21 +342,21 @@ export const PosCheckout: React.FC = () => {
             <div className="border-t border-secondary-200 pt-4 mt-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-secondary-600">Subtotal</span>
-                <span className="font-medium">${subtotal.toFixed(2)}</span>
+                <span className="font-medium">${currencyFormatter.format(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-secondary-600">Tax (10%)</span>
-                <span className="font-medium">${tax.toFixed(2)}</span>
+                <span className="font-medium">${currencyFormatter.format(tax)}</span>
               </div>
               {discount > 0 && (
                 <div className="flex justify-between text-sm text-success">
                   <span>Discount</span>
-                  <span>-${discount.toFixed(2)}</span>
+                  <span>-${currencyFormatter.format(discount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold pt-2">
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span>${currencyFormatter.format(total)}</span>
               </div>
             </div>
 

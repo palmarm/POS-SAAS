@@ -61,80 +61,100 @@ export const Reports: React.FC = () => {
 
   const fetchReportData = async () => {
     setLoading(true);
-    try {
-     // Fetch sales report from API
-     const response = await reportAPI.getSalesReport(period);
-     const data = response.data.data;
+      try {
+        const response = await reportAPI.getSalesReport(period);
+        const data = response.data.data;
 
-     // Format sales data for charts
-     const formattedSaleData = data.daily_sales.map((item: any) => ({
-        date: new Date(item.date).toLocaleDateString(),
-        sales: parseFloat(item.total_sales) || 0,
-        orders: parseInt(item.orders) || 0,
-        average_order: parseFloat(item.average_order) || 0,
-      }));
-      setSalesData(formattedSaleData);
+        // SALES DATA
+        const formattedSales = data.daily_sales.map((item: any) => ({
+          date: new Date(item.date).toLocaleDateString(),
+          sales: Number(item.total_sales) || 0,
+          orders: Number(item.orders) || 0,
+          average_order: Number(item.average_order) || 0
+        }));
 
-      // Formart payment breakdown
-      const formattedPaymentData = data.payment_breakdown.map((payment: any) => ({
-        payment_type: payment.payment_type,
-        count: parseInt(payment.count) || 0,
-        total_amount: parseFloat(payment.total_amount) || 0,
-        percentage: 0,
-      }));
-      // Calculate percentage for payment breakdown
-      const totalAmount = formattedPaymentData.reduce((sum:number, p:PaymentBreakdown) => sum + p.total_amount, 0);
-      const formattedWithPercentage = formattedPaymentData.map((p: PaymentBreakdown) => ({
-        ...p,
-        percentage: totalAmount > 0 ? (p.total_amount / totalAmount) * 100 : 0,
-      }));
-      setPaymentBreakdown(formattedWithPercentage);
+        setSalesData(formattedSales);
 
-      setSummary({
-        total_orders: parseInt(data.total_orders) || 0,
-        total_revenue: parseFloat(data.total_revenue) || 0,
-        average_order_value: parseFloat(data.average_order_value) || 0,
-        unique_customers: parseInt(data.unique_customers) || 0,
-      });
-    } catch (error: any) {
-      console.error('Failed to fetch report data:', error);
-      showToast(error.response?.data?.message || 'Failed to load report data', 'error');
+        // PRODUCTS (FIXED)
+        const formattedProducts = data.top_products.map((p: any) => ({
+          name: p.name,
+          units: Number(p.units_sold) || 0,
+          revenue: Number(p.revenue) || 0,
+          sku: p.sku
+        }));
 
-      // Fallback to mock data
-      setMockData();
-    } finally {
-      setLoading(false);
-    }
+        setProductData(formattedProducts);
+
+        // PAYMENT
+        const totalAmount = data.payment_breakdown.reduce(
+          (sum: number, p: any) => sum + Number(p.total_amount || 0),
+          0
+        );
+
+        setPaymentBreakdown(
+          data.payment_breakdown.map((p: any) => ({
+            payment_type: p.payment_type,
+            count: Number(p.count),
+            total_amount: Number(p.total_amount),
+            percentage: totalAmount > 0 ? (p.total_amount / totalAmount) * 100 : 0
+          }))
+        );
+
+        // SUMMARY
+        setSummary({
+          total_orders: Number(data.summary?.total_orders) || 0,
+          total_revenue: Number(data.summary?.total_revenue) || 0,
+          average_order_value: Number(data.summary?.average_order_value) || 0,
+          unique_customers: Number(data.summary?.unique_customers) || 0
+        });
+
+      } catch (error: any) {
+        console.error(error);
+        showToast('Failed to load report data', 'error');
+
+        setSalesData([]);
+        setProductData([]);
+        setPaymentBreakdown([]);
+        setSummary({
+          total_orders: 0,
+          total_revenue: 0,
+          average_order_value: 0,
+          unique_customers: 0,
+        });
+      } finally {
+        setLoading(false);
+      }
   };
+  
 
-  const setMockData = () => {
-    const mockSalesData: SalesData[] = [
-      { date: 'Mar 1', sales: 1250, orders: 12, average_order: 104.17 },
-      { date: 'Mar 2', sales: 1890, orders: 18, average_order: 105.00 },
-      { date: 'Mar 3', sales: 2100, orders: 21, average_order: 100.00 },
-      { date: 'Mar 4', sales: 1560, orders: 15, average_order: 104.00 },
-      { date: 'Mar 5', sales: 2430, orders: 24, average_order: 101.25 },
-      { date: 'Mar 6', sales: 1870, orders: 17, average_order: 110.00 },
-      { date: 'Mar 7', sales: 2100, orders: 20, average_order: 105.00 },
-    ];
-    setSalesData(mockSalesData);
+  // const setMockData = () => {
+  //   const mockSalesData: SalesData[] = [
+  //     { date: 'Mar 1', sales: 1250, orders: 12, average_order: 104.17 },
+  //     { date: 'Mar 2', sales: 1890, orders: 18, average_order: 105.00 },
+  //     { date: 'Mar 3', sales: 2100, orders: 21, average_order: 100.00 },
+  //     { date: 'Mar 4', sales: 1560, orders: 15, average_order: 104.00 },
+  //     { date: 'Mar 5', sales: 2430, orders: 24, average_order: 101.25 },
+  //     { date: 'Mar 6', sales: 1870, orders: 17, average_order: 110.00 },
+  //     { date: 'Mar 7', sales: 2100, orders: 20, average_order: 105.00 },
+  //   ];
+  //   setSalesData(mockSalesData);
       
-    const mockProductData: ProductPerformance[] = [
-      { name: 'Wireless Mouse', units: 120, revenue: 2400, sku: 'WM-001' },
-      { name: 'Bluetooth Headphones', units: 80, revenue: 4000, sku: 'BH-002' },
-      { name: 'USB-C Hub', units: 60, revenue: 1800, sku: 'UH-003' },
-      { name: 'Laptop Stand', units: 50, revenue: 2500, sku: 'LS-004' },
-      { name: 'Webcam', units: 40, revenue: 3200, sku: 'WC-005' },
-    ];
-    setProductData(mockProductData);
+  //   const mockProductData: ProductPerformance[] = [
+  //     { name: 'Wireless Mouse', units: 120, revenue: 2400, sku: 'WM-001' },
+  //     { name: 'Bluetooth Headphones', units: 80, revenue: 4000, sku: 'BH-002' },
+  //     { name: 'USB-C Hub', units: 60, revenue: 1800, sku: 'UH-003' },
+  //     { name: 'Laptop Stand', units: 50, revenue: 2500, sku: 'LS-004' },
+  //     { name: 'Webcam', units: 40, revenue: 3200, sku: 'WC-005' },
+  //   ];
+  //   setProductData(mockProductData);
 
-    setSummary({
-      total_orders: 120,
-      total_revenue: 15000,
-      average_order_value: 125,
-      unique_customers: 80,
-    });
-  };
+  //   setSummary({
+  //     total_orders: 120,
+  //     total_revenue: 15000,
+  //     average_order_value: 125,
+  //     unique_customers: 80,
+  //   });
+  // };
 
   const exportReport = async () => {
     setExporting(true);

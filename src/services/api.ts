@@ -65,16 +65,23 @@ export const userAPI = {
 
 // Product API
 export const productAPI = {
-  getAll: (filters?: { branch_id?: number; category_id?: number; low_stock?: boolean }) => {
-    const params = new URLSearchParams();
-    if (filters?.branch_id) params.append('branch_id', filters.branch_id.toString());
-    if (filters?.category_id) params.append('category_id', filters.category_id.toString());
-    if (filters?.low_stock) params.append('low_stock', 'true');
-    return API.get(`/products?${params.toString() ? '?' + params.toString() : ''}`);
-    
-  },
+  getAll: (filters?: {
+     branch_id?: number; 
+     category_id?: number; 
+     low_stock?: boolean }) => 
+      API.get('/products', { params: filters }),
+
   getOne: (id: number) => API.get(`/products/${id}`),
-  create: (data: any) => API.post('/products', data),
+  create: (data: {
+    name: string;
+    description?: string;
+    price: number;
+    category_id: number;
+    branch_id: number;
+    stock: number;
+    sku?: string | null;
+    image_url?: string | null;
+  }) => API.post('/products', data),
   update: (id: number, data: any) => API.put(`/products/${id}`, data),
   delete: (id: number) => API.delete(`/products/${id}`),
   getLowStock: (threshold = 10) => API.get(`/products/low-stock?threshold=${threshold}`),
@@ -128,6 +135,8 @@ export const reportAPI = {
     getInventoryReport: () => API.get('/reports/inventory'),
     exportReport: (type: string, start_date?: string, end_date?: string) => {
         const params = new URLSearchParams();
+        params.append('type', type);
+
         if (start_date) params.append('start_date', start_date);
         if (end_date) params.append('end_date', end_date);
         return API.get(`/reports/export/${params.toString() ? '?' + params.toString() : ''}`,

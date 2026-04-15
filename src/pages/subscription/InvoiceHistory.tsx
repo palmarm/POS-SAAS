@@ -47,18 +47,28 @@ export const InvoiceHistory: React.FC = () => {
 
   const fetchInvoices = async () => {
     setLoading(true);
-    try {
-      const response = await invoiceAPI.getAll();
-      if (response.data.success) {
-        setInvoices(response.data.data);
-        setFilteredInvoices(response.data.data);
+      try {
+        const response = await invoiceAPI.getAll();
+          if (response.data.success) {
+            const normalizedInvoices = response.data.data.map((inv: any) => ({
+              ...inv,
+              amount: Number(inv.amount) || 0,
+              tax: Number(inv.tax) || 0,
+              total: Number(inv.total) || 0,
+            }));
+
+            setInvoices(normalizedInvoices);
+            setFilteredInvoices(normalizedInvoices);
+          }
+        } catch (error: any) {
+        console.error('Error fetching invoices:', error);
+        showToast(
+          error.response?.data?.message || 'Failed to load invoices',
+          'error'
+        );
+        } finally {
+          setLoading(false);
       }
-    } catch (error: any) {
-      console.error('Error fetching invoices:', error);
-      showToast(error.response?.data?.message || 'Failed to load invoices', 'error');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const filterInvoices = () => {

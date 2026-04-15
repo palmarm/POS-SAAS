@@ -6,7 +6,8 @@ import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { useToast } from '../../hooks/useToast';
 import { productAPI, categoryAPI } from '../../services/api';
-import { error } from 'console';
+import { set } from 'react-hook-form';
+import { number } from 'yup';
 
 interface Product {
   id: number;
@@ -31,7 +32,7 @@ export const ProductManagement: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({
@@ -52,37 +53,49 @@ export const ProductManagement: React.FC = () => {
     fetchCategories();
   }, []);
 
+  const normalizeProduct = (product: any): Product => ({
+  id: Number(product.id) || 0,
+  name: product.name ?? '',
+  description: product.description ?? '',
+  price: Number(product.price) || 0, // ✅ Ensures price is a number
+  category_id: Number(product.category_id) || 0,
+  category_name: product.category_name ?? 'Uncategorized',
+  stock: Number(product.stock ?? product.stock_quantity) || 0,
+  sku: product.sku ?? '',
+  image_url: product.image_url ?? '',
+  created_at: product.created_at ?? new Date().toISOString(),
+});
+
   const fetchProducts = async () => {
-  setLoading(true);
-  try {
-    const response = await productAPI.getAll();
-    
-    // Handle different response structures
-    let productsData = [];
-    if (response.data && response.data.data) {
-      productsData = response.data.data;
-    } else if (response.data && Array.isArray(response.data)) {
-      productsData = response.data;
-    } else if (Array.isArray(response.data)) {
-      productsData = response.data;
-    } else {
-      productsData = [];
+    setLoading(true);
+    try {
+      const response = await productAPI.getAll();
+      
+      let productsData:any[] = [];
+      
+      // Handle different response structures
+      if (response.data && response.data.data) {
+        productsData = response.data.data;
+      } else if (response.data && Array.isArray(response.data)) {
+        productsData = response.data;
+      } else if (Array.isArray(response.data)) {
+        productsData = response.data;
+      } else {
+        console.error('Unexpected products response:', response.data);
+        productsData = [];
+      }
+      // Normalize products to ensure consistent structure
+      const normalizedProducts: Product[] = productsData.map(normalizeProduct);
+
+      setProducts(normalizedProducts);
+    } catch (error: any) {
+      console.error('Failed to fetch products:', error);
+      showToast(error.response?.data?.message || 'Failed to fetch products', 'error');
+      setProducts([]);
+    } finally {
+      setLoading(false);
     }
-    
-    if (!Array.isArray(productsData)) {
-      console.error('Products data is not an array:', productsData);
-      productsData = [];
-    }
-    
-    setProducts(productsData);
-  } catch (error: any) {
-    console.error('Failed to fetch products:', error);
-    showToast(error.response?.data?.message || 'Failed to fetch products', 'error');
-    setProducts([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const fetchCategories = async () => {
     try {
@@ -94,61 +107,77 @@ export const ProductManagement: React.FC = () => {
     }
   };
 
-  
-
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || product.category_id === parseInt(selectedCategory);
+    const matchesSearch = 
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (product.description || '')
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+
+    const matchesCategory =
+      selectedCategory === 'all' 
+      || product.category_id === selectedCategory;
+
     return matchesSearch && matchesCategory;
   });
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.price || !formData.category_id) {
-      showToast('Please fill all required fields', 'error');
+    // Validation
+    if (!formData.name.trim()) {
+      showToast('Product name is required', 'error');
+      return;
+    }
+    if (!formData.category_id) {
+      showToast('Please select a category', 'error');
+      return;
+    }
+    if (Number(formData.price) <= 0) {
+      showToast('Price must be greater than zero', 'error');
+      return;
+    }
+    if (Number(formData.stock) < 0) {
+      showToast('Stock cannot be negative', 'error');
       return;
     }
 
-    if (formData.price <= 0) {
-    showToast('Price must be greater than 0', 'error');
-    return;
-  }
-
-  if (formData.stock < 0) {
-    showToast('Stock cannot be negative', 'error');
-    return;
-  }
-
     setLoading(true);
     try {
-      
+      // Retrieve branch_id from stored business data if available
+      const business = JSON.parse(localStorage.getItem('business') || '{}');
+
+      const productData = {
+        name: formData.name.trim(),
+        description: formData.description?.trim() || '',
+        price: Number(formData.price),
+        category_id: Number(formData.category_id),
+        branch_id: business?.branch_id || 1, // Include branch_id if available
+        stock: Number(formData.stock),
+        ...formData.sku && { sku: formData.sku.trim() },
+        ...formData.image_url && { image_url: formData.image_url.trim() }
+      };
+      console.log('Submitting product data:', productData);
+
       if (editingProduct) {
-        // Update existing product
-        await productAPI.update(editingProduct.id, {
-          name: formData.name,
-          description: formData.description,
-          price: formData.price,
-          category_id: formData.category_id,
-          stock: formData.stock,
-          sku: formData.sku,
-          image_url: formData.image_url
-        });
+        await productAPI.update(editingProduct.id, productData);
         showToast('Product updated successfully', 'success');
       } else {
-        // Create new product
-        await productAPI.create({
-          name: formData.name,
-          description: formData.description,
-          price: formData.price,
-          category_id: formData.category_id,
-          stock: formData.stock,
-          sku: formData.sku,
-          image_url: formData.image_url
-        });
+        await productAPI.create(productData);
         showToast('Product created successfully', 'success');
       }
       setIsModalOpen(false);
       resetForm();
+      await fetchProducts(); // Refresh product list after changes
+    } catch (error: any) {
+      console.error('Product operation error:', error.response?.data || error);
+
+      const errorMessage = 
+        error.response?.data ||
+        error.response?.data.error ||
+        (Array.isArray(error.response?.data?.errors)
+          ? error.response.data.errors.map((e: any) => e.msg).join(', ')
+          : 'Operation failed');
+
+      showToast(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -229,7 +258,9 @@ export const ProductManagement: React.FC = () => {
               <select
                 className="w-full rounded-lg border border-secondary-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(e) => setSelectedCategory(
+                  e.target.value === 'all' ? 'all' : Number(e.target.value)
+                )}
               >
                 <option value="all">All Categories</option>
                 {categories.map(cat => (
@@ -248,6 +279,7 @@ export const ProductManagement: React.FC = () => {
                 <tr>
                   <th className="text-left px-6 py-3 text-sm font-medium text-secondary-600">Image</th>
                   <th className="text-left px-6 py-3 text-sm font-medium text-secondary-600">Name</th>
+                  <th className="text-left px-6 py-3 text-sm font-medium text-secondary-600">SKU</th>
                   <th className="text-left px-6 py-3 text-sm font-medium text-secondary-600">Category</th>
                   <th className="text-right px-6 py-3 text-sm font-medium text-secondary-600">Price</th>
                   <th className="text-right px-6 py-3 text-sm font-medium text-secondary-600">Stock</th>
@@ -278,7 +310,13 @@ export const ProductManagement: React.FC = () => {
                         {getCategoryName(product.category_id)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right font-medium">${product.price.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-right font-medium">
+                        {new Intl.NumberFormat('en-KE', {
+                          style: 'currency',
+                          currency: 'KES',
+                        }).format(product.price)}
+                      </td>
+                    {/* <td className="px-6 py-4 text-right font-medium">${Number(product.price).toFixed(2)}</td> */}
                     <td className="px-6 py-4 text-right">
                       <span className={`px-2 py-1 rounded-full text-xs ${
                         product.stock < 10 ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700'
@@ -349,14 +387,20 @@ export const ProductManagement: React.FC = () => {
                 type="number"
                 step="0.01"
                 value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  price: e.target.value === '' ? 0 : Number(e.target.value),
+                 })}
                 placeholder="0.00"
               />
               <Input
                 label="Stock *"
                 type="number"
                 value={formData.stock}
-                onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  stock: e.target.value === '' ? 0 : Number(e.target.value),
+                 })}
                 placeholder="0"
               />
             </div>
@@ -365,7 +409,10 @@ export const ProductManagement: React.FC = () => {
               <select
                 className="w-full rounded-lg border border-secondary-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 value={formData.category_id}
-                onChange={(e) => setFormData({ ...formData, category_id: parseInt(e.target.value) })}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  category_id: e.target.value ? Number(e.target.value) : 0,
+                })}
               >
                 <option value="">Select category</option>
                 {categories.map(cat => (

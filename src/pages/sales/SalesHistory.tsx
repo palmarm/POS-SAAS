@@ -24,7 +24,7 @@ interface Sale {
   customer_name: string;
   customer_id?: number;
   items_count: number;
-  subTotal: number;
+  subtotal: number;
   tax: number;
   discount: number;
   total: number;
@@ -57,6 +57,12 @@ export const SalesHistory: React.FC = () => {
     filterSales();
   }, [searchTerm, startDate, endDate, selectedPaymentMethod, sales]);
 
+  // Format currency values to 2 decimal places
+  const formatCurrency = (value: any) => {
+    const number = Number(value);
+    return isNaN(number) ? '0.00' : number.toFixed(2);
+  };
+
   const fetchSales = async () => {
     setLoading(true);
     try {
@@ -66,18 +72,19 @@ export const SalesHistory: React.FC = () => {
       // Formart the sales data
       const formattedSales = salesData.map((sale: any) => ({
         id: sale.id,
-        transactionId: sale.sale_number,
-        customerName: sale.customer_name  || 'Walk-in Customer',
-        customer_id: sale.customer_id, 
-        items_count: sale.items_count || 0,
-        subtotal: sale.subTotal || sale.total * 0.9, // Assuming tax is 10% if subTotal is not provided
-        tax: sale.tax || sale.total * 0.1, // Assuming tax is 10% if tax is not provided
-        discount: sale.discount || 0,
-        total: sale.total,
+        sale_number: sale.sale_number,
+        customer_name: sale.customer_name  || 'Walk-in Customer',
+        customer_id: sale.customer_id || undefined, 
+        items_count: Number(sale.item_count || sale.items_count || 0),
+        subtotal: Number(sale.subtotal ??  sale.total * 0.9), // Assuming tax is 10% if subTotal is not provided
+        tax: Number(sale.tax ?? sale.total * 0.1), // Assuming tax is 10% if tax is not provided
+        discount: Number(sale.discount ?? 0),
+        total: Number(sale.total ?? 0),
         payment_type: sale.payment_type,
-        payment_status: sale.payment_status,
-        cashier_name: sale.cashier_name,
-        created_at: sale.created_at
+        payment_status: sale.payment_status || 'completed',
+        cashier_name: sale.cashier_name || 'Unknown Cashier',
+        created_at: sale.created_at,
+        items: [] // Will be populated when viewing receipt details
       }));
 
       setSales(formattedSales);
@@ -131,8 +138,16 @@ export const SalesHistory: React.FC = () => {
 
   // Fetch detailed items for the receipt
     const details = await fetchSaleDetails(sale.id);
+
     if (details && details.items) {
-      setSelectedSale(prev => prev ? { ...prev, items: details.items } : prev);
+      const normalizedItems = details.items.map((item: any) => ({
+        ...item,
+        price: Number(item.price) || 0,
+        quantity: Number(item.quantity) || 0,
+        discount: Number(item.discount || 0),
+        total: Number(item.total) || 0,
+      }));
+      setSelectedSale(prev => prev ? { ...prev, items: normalizedItems } : prev);
     }
   };
 
@@ -195,12 +210,16 @@ export const SalesHistory: React.FC = () => {
 
   // Calculate totals for the summary section
   const calculateTotals = () => {
-    const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalTax = filteredSales.reduce((sum, sale) => sum + sale.tax, 0);
-    const totalDiscount = filteredSales.reduce((sum, sale) => sum + sale.discount, 0);
+    const totalRevenue = filteredSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+    const totalTax = filteredSales.reduce((sum, sale) => sum + Number(sale.tax || 0), 0);
+    const totalDiscount = filteredSales.reduce((sum, sale) => sum + Number(sale.discount || 0), 0);
     const averageOrder = filteredSales.length > 0 ? totalRevenue / filteredSales.length : 0;
 
-    return { totalRevenue, totalTax, totalDiscount, averageOrder };
+    return { 
+      totalRevenue: Number(totalRevenue), 
+      totalTax: Number(totalTax), 
+      totalDiscount: Number(totalDiscount), 
+      averageOrder: Number(averageOrder) };
   };
 
   // Destructure totals for display
@@ -240,19 +259,19 @@ export const SalesHistory: React.FC = () => {
         <div className="grid grid-cols-4 gap-4 mb-6">
           <Card className="text-center">
             <p className="text-sm text-secondary-500 mb-1">Total Revenue</p>
-            <p className="text-2xl font-bold text-success-600">${totalRevenue.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-success-600">${Number(totalRevenue).toFixed(2)}</p>
           </Card>
           <Card className="text-center">
             <p className="text-sm text-secondary-500 mb-1">Total Tax</p>
-            <p className="text-2xl font-bold text-secondary-900">${totalTax.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-secondary-900">${Number(totalTax).toFixed(2)}</p>
           </Card>
           <Card className="text-center">
             <p className="text-sm text-secondary-500 mb-1">Total Discounts</p>
-            <p className="text-2xl font-bold text-warning-600">${totalDiscount.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-warning-600">${Number(totalDiscount).toFixed(2)}</p>
           </Card>
           <Card className="text-center">
             <p className="text-sm text-secondary-500 mb-1">Average Order</p>
-            <p className="text-2xl font-bold text-primary-600">${averageOrder.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-primary-600">${Number(averageOrder).toFixed(2)}</p>
           </Card>
         </div>
 
@@ -329,7 +348,7 @@ export const SalesHistory: React.FC = () => {
                     <td className="px-6 py-4 text-secondary-600">{sale.cashier_name}</td>
                     <td className="px-6 py-4 text-right text-secondary-600">{sale.items_count} items</td>
                     <td className="px-6 py-4 text-right font-bold text-secondary-900">
-                      ${sale.total.toFixed(2)}
+                      ${formatCurrency(sale.total)}
                     </td>
                      <td className="px-6 py-4 text-center">
                       {getPaymentMethodIcon(sale.payment_type)}
@@ -417,8 +436,8 @@ export const SalesHistory: React.FC = () => {
                       <tr key={idx} className="border-b border-secondary-100">
                         <td className="py-2">{item.product_name}</td>
                         <td className="text-center py-2">{item.quantity}</td>
-                        <td className="text-right py-2">${item.price.toFixed(2)}</td>
-                        <td className="text-right py-2">${item.total.toFixed(2)}</td>
+                        <td className="text-right py-2">${formatCurrency(item.price)}</td>
+                        <td className="text-right py-2">${formatCurrency(item.total)}</td>
                       </tr>
                     ))}
                     {(!selectedSale.items || selectedSale.items.length === 0) && (
@@ -436,21 +455,21 @@ export const SalesHistory: React.FC = () => {
               <div className="border-t border-secondary-200 pt-4">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal:</span>
-                  <span>${selectedSale.subTotal.toFixed(2)}</span>
+                  <span>${formatCurrency(selectedSale.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Tax:</span>
-                  <span>${selectedSale.tax.toFixed(2)}</span>
+                  <span>${formatCurrency(selectedSale.tax)}</span>
                 </div>
                  {selectedSale.discount > 0 && (
                   <div className="flex justify-between text-sm text-success">
                     <span>Discount:</span>
-                    <span>-${selectedSale.discount.toFixed(2)}</span>
+                    <span>-${formatCurrency(selectedSale.discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-lg font-bold mt-2 pt-2 border-t border-secondary-200">
                   <span>Total:</span>
-                  <span>${selectedSale.total.toFixed(2)}</span>
+                  <span>${formatCurrency(selectedSale.total)}</span>
                 </div>
                 <div className="flex justify-between text-sm mt-2">
                   <span>Payment Method:</span>
