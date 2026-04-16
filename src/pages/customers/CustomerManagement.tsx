@@ -61,42 +61,16 @@ export const CustomerManagement: React.FC = () => {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const mockCustomers: Customer[] = [
-        {
-          id: '1',
-          name: 'John Doe',
-          email: 'john@example.com',
-          phone: '+1234567890',
-          totalPurchases: 1250.00,
-          outstandingBalance: 250.00,
-          creditStatus: 'pending',
-          expectedPaymentDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          createdAt: new Date()
-        },
-        {
-          id: '2',
-          name: 'Jane Smith',
-          email: 'jane@example.com',
-          phone: '+1234567891',
-          totalPurchases: 890.00,
-          outstandingBalance: 0,
-          creditStatus: 'paid',
-          expectedPaymentDate: new Date(),
-          createdAt: new Date()
-        },
-        {
-          id: '3',
-          name: 'Bob Johnson',
-          email: 'bob@example.com',
-          phone: '+1234567892',
-          totalPurchases: 3200.00,
-          outstandingBalance: 1200.00,
-          creditStatus: 'overdue',
-          expectedPaymentDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-          createdAt: new Date()
-        }
-      ];
-      setCustomers(mockCustomers);
+
+      const storedCustomers = JSON.parse(localStorage.getItem('customers') || '[]');
+
+      const parsedCustomers = storedCustomers.map((c: any) => ({
+        ...c,
+        expectedPaymentDate: new Date(c.expectedPaymentDate),
+        createdAt: new Date(c.createdAt)
+      }));
+
+      setCustomers(parsedCustomers);
     } finally {
       setLoading(false);
     }

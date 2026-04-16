@@ -213,6 +213,49 @@ export const PosCheckout: React.FC = () => {
     }
   };
 
+  const [creditCustomer, setCreditCustomer] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    notes: '',
+    expectedPaymentDate: ''
+  });
+
+  const handleAddCreditCustomer = () => {
+      if (!creditCustomer.name || !creditCustomer.phone) {
+        showToast('Customer name and phone are required', 'error');
+        return;
+    }
+
+    const newCustomer = {
+        id: Date.now().toString(),
+        name: creditCustomer.name,
+        email: creditCustomer.email || '',
+        phone: creditCustomer.phone,
+        totalPurchases: total,
+        outstandingBalance: total,
+        creditStatus: 'pending',
+        expectedPaymentDate: new Date(creditCustomer.expectedPaymentDate),
+        notes: creditCustomer.notes,
+        createdAt: new Date()
+    };
+
+    // Save to localStorage (temporary solution)
+    const existing = JSON.parse(localStorage.getItem('customers') || '[]');
+    localStorage.setItem('customers', JSON.stringify([...existing, newCustomer]));
+
+    showToast('Credit customer added successfully', 'success');
+
+    // Reset form
+    setCreditCustomer({
+      name: '',
+      phone: '',
+      email: '',
+      notes: '',
+      expectedPaymentDate: ''
+    });
+  };
+
   // Format currency
   const currencyFormatter = new Intl.NumberFormat('en-KE', {
     style: 'currency',
@@ -236,215 +279,340 @@ export const PosCheckout: React.FC = () => {
   }
 
   return (
-    <div className="h-screen pt-16 pl-[240px] bg-background">
-      <div className="h-full grid grid-cols-12 gap-6 p-6">
-        {/* Left side - Products */}
-        <div className="col-span-7 space-y-4">
-          <Card>
-            <div className="space-y-4">
-              {/* Search and barcode */}
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Input
-                    icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-                    placeholder="Search products by name or SKU..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <Button variant="secondary" onClick={() => fetchProducts()}>
-                  Refresh
-                  </Button>
-              </div>
+  <div className="h-screen pt-16 pl-[240px] bg-slate-50">
+    <div className="h-full grid grid-cols-12 gap-6 p-6">
+      
+      {/* ===================== */}
+      {/* Product Selection Area */}
+      {/* ===================== */}
+      <div className="col-span-12 xl:col-span-7 space-y-4">
+        <Card className="p-5 shadow-sm rounded-2xl border border-slate-200">
+          
+          {/* Search & Refresh */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="flex-1">
+              <Input
+                icon={<MagnifyingGlassIcon className="w-5 h-5 text-slate-400" />}
+                placeholder="Search products by name or SKU..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={fetchProducts}
+              className="px-5 py-2 rounded-xl"
+            >
+              Refresh
+            </Button>
+          </div>
 
-              {/* Product grid */}
-              <div className="grid grid-cols-3 gap-3 max-h-[calc(100vh-250px)] overflow-y-auto">
-                {filteredProducts.map((product) => (
-                  <button
-                    key={product.id}
-                    onClick={() => addToCart(product)}
-                    className="bg-white p-4 rounded-lg border border-secondary-200 hover:border-primary-500 hover:shadow-md transition-all text-left"
-                    disabled={product.stock === 0}
-                  >
-                    <div className="aspect-square bg-secondary-100 rounded-md mb-2 flex items-center justify-center">
-                      {product.image_url ? (
-                        <img src={product.image_url} alt={product.name} className="w-12 h-12 object-cover" />
-                      ) : (
-                        <span className="text-2xl">📦</span>
-                      )}
-                    </div>
-                    <h3 className="font-medium text-secondary-900">{product.name}</h3>
-                    <p className="text-sm text-secondary-500">$ {currencyFormatter.format(Number(product.price))}</p>
-                    <p className="text-xs text-secondary-400 mt-1">
-                      Stock: {product.stock} {product.sku && `| SKU: ${product.sku}`}
-                      </p>
-                  </button>
-                ))}
-                {filteredProducts.length === 0 && (
-                  <div className="col-span-3 text-center py-8 text-secondary-400">
-                    No products found
-                  </div>
+          {/* Product Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
+            {filteredProducts.map((product) => (
+              <button
+                key={product.id}
+                onClick={() => addToCart(product)}
+                disabled={product.stock === 0}
+                className="group bg-white rounded-2xl border border-slate-200 p-4 text-left 
+                           hover:shadow-lg hover:border-primary-500 transition-all duration-200"
+              >
+                {/* Product Image */}
+                <div className="aspect-square bg-slate-100 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
+                  {product.image_url ? (
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="w-14 h-14 object-cover"
+                    />
+                  ) : (
+                    <span className="text-3xl">📦</span>
+                  )}
+                </div>
+
+                {/* Product Info */}
+                <h3 className="font-semibold text-slate-800 group-hover:text-primary-600">
+                  {product.name}
+                </h3>
+                <p className="text-primary-600 font-bold mt-1">
+                  {currencyFormatter.format(Number(product.price))}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Stock: {product.stock} {product.sku && `| SKU: ${product.sku}`}
+                </p>
+
+                {product.stock === 0 && (
+                  <span className="inline-block mt-2 text-xs text-red-500 font-medium">
+                    Out of Stock
+                  </span>
                 )}
-              </div>
+              </button>
+            ))}
+          </div>
+
+          {filteredProducts.length === 0 && (
+            <div className="text-center py-10 text-slate-400">
+              No products found
             </div>
-          </Card>
-        </div>
+          )}
+        </Card>
+      </div>
 
-        {/* Right side - Cart */}
-        <div className="col-span-5">
-          <Card className="h-full flex flex-col">
-            <h2 className="text-lg font-bold text-secondary-900 mb-4">Current Sale</h2>
+      {/* ===================== */}
+      {/* Current Sale Panel */}
+      {/* ===================== */}
+      <div className="col-span-12 xl:col-span-5">
+        <Card className="h-full flex flex-col p-5 shadow-sm rounded-2xl border border-slate-200">
+          
+          {/* Header */}
+          <h2 className="text-xl font-bold text-slate-800 mb-4">
+            Current Sale
+          </h2>
 
-            {/* Cart items */}
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {cart.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 p-2 bg-secondary-50 rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium text-secondary-900">{item.name}</p>
-                    <p className="text-sm text-secondary-500">${(Number(item.price)).toFixed(2)}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateQuantity(item.id, -1)}
-                      className="p-1 hover:bg-secondary-200 rounded"
-                    >
-                      <MinusIcon className="w-4 h-4" />
-                    </button>
-                    <span className="w-8 text-center">{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(item.id, 1)}
-                      className="p-1 hover:bg-secondary-200 rounded"
-                      disabled={item.quantity >= item.stock}
-                    >
-                      <PlusIcon className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="p-1 hover:bg-danger-50 text-danger rounded"
-                    >
-                      <XMarkIcon className="w-4 h-4" />
-                    </button>
-                  </div>
+          {/* Cart Items */}
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+            {cart.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100"
+              >
+                <div className="flex-1">
+                  <p className="font-medium text-slate-800">{item.name}</p>
+                  <p className="text-sm text-slate-500">
+                    {currencyFormatter.format(Number(item.price))}
+                  </p>
                 </div>
-              ))}
 
-              {cart.length === 0 && (
-                <div className="text-center py-8 text-secondary-400">
-                  {/* <ShoppingCartIcon className="w-12 h-12 mx-auto mb-2" /> */}
-                  <p>Cart is empty</p>
-                  <p className="text-sm mt-1">Click on products to add to cart</p>
+                {/* Quantity Controls */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => updateQuantity(item.id, -1)}
+                    className="p-1.5 bg-white border rounded-lg hover:bg-slate-100"
+                  >
+                    <MinusIcon className="w-4 h-4" />
+                  </button>
+                  <span className="w-8 text-center font-medium">
+                    {item.quantity}
+                  </span>
+                  <button
+                    onClick={() => updateQuantity(item.id, 1)}
+                    disabled={item.quantity >= item.stock}
+                    className="p-1.5 bg-white border rounded-lg hover:bg-slate-100"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => removeFromCart(item.id)}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
                 </div>
-              )}
-            </div>
-
-            {/* Summary */}
-            <div className="border-t border-secondary-200 pt-4 mt-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-secondary-600">Subtotal</span>
-                <span className="font-medium">${currencyFormatter.format(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-secondary-600">Tax (10%)</span>
-                <span className="font-medium">${currencyFormatter.format(tax)}</span>
-              </div>
-              {discount > 0 && (
-                <div className="flex justify-between text-sm text-success">
-                  <span>Discount</span>
-                  <span>-${currencyFormatter.format(discount)}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-lg font-bold pt-2">
-                <span>Total</span>
-                <span>${currencyFormatter.format(total)}</span>
-              </div>
-            </div>
+            ))}
 
-            {/* Payment methods */}
-            <div className="grid grid-cols-4 gap-2 mt-4">
-              <Button
-                variant={selectedPayment === 'cash' ? 'primary' : 'ghost'}
-                onClick={() => setSelectedPayment('cash')}
-                className="text-sm"
-              >
-                💵 Cash
-              </Button>
-              <Button
-                variant={selectedPayment === 'card' ? 'primary' : 'ghost'}
-                onClick={() => setSelectedPayment('card')}
-                className="text-sm"
-              >
-                💳 Card
-              </Button>
-              <Button
-                variant={selectedPayment === 'mobile' ? 'primary' : 'ghost'}
-                onClick={() => setSelectedPayment('mobile')}
-                className="text-sm"
-              >
-                📱 Mobile
-              </Button>
-              <Button
-                variant={selectedPayment === 'credit' ? 'primary' : 'ghost'}
-                onClick={() => setSelectedPayment('credit')}
-                className="text-sm"
-              >
-                📝 Credit
-              </Button>
-            </div>
+            {cart.length === 0 && (
+              <div className="text-center py-10 text-slate-400">
+                <p className="font-medium">Cart is empty</p>
+                <p className="text-sm mt-1">
+                  Click on products to add to cart
+                </p>
+              </div>
+            )}
+          </div>
 
-            {/* Credit payment details (shown only when credit selected) */}
-            {selectedPayment === 'credit' && (
-              <div className="mt-4 p-3 bg-warning-50 rounded-lg space-y-3">
-                <Input label="Expected Payment Date" type="date" />
-                <Input label="Notes" placeholder="Add payment notes..." />
-                <Button variant="primary" fullWidth>Add Credit Customer</Button>
+          {/* ===================== */}
+          {/* Order Summary */}
+          {/* ===================== */}
+          <div className="border-t pt-4 mt-4 space-y-2 text-sm">
+            <div className="flex justify-between text-slate-600">
+              <span>Subtotal</span>
+              <span className="font-medium">
+                {currencyFormatter.format(subtotal)}
+              </span>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span>Tax (10%)</span>
+              <span className="font-medium">
+                {currencyFormatter.format(tax)}
+              </span>
+            </div>
+            {discount > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>Discount</span>
+                <span>-{currencyFormatter.format(discount)}</span>
               </div>
             )}
 
-            {/* Quick actions */}
-            <div className="grid grid-cols-3 gap-2 mt-4">
-              <Button variant="secondary" size="sm" onClick={() => setShowDiscountModal(true)}>
-                Apply Discount
-              </Button>
-              <Button variant="secondary" size="sm">Hold Order</Button>
-              <Button variant="danger" size="sm">Clear Cart</Button>
+            {/* Total */}
+            <div className="flex justify-between items-center pt-3 mt-3 border-t">
+              <span className="text-lg font-semibold">Total</span>
+              <span className="text-2xl font-bold text-primary-600">
+                {currencyFormatter.format(total)}
+              </span>
             </div>
+          </div>
 
-            {/* Checkout button */}
+          {/* ===================== */}
+          {/* Payment Methods */}
+          {/* ===================== */}
+          <div className="grid grid-cols-4 gap-2 mt-5">
             <Button
-              variant="primary"
-              size="lg"
-              fullWidth
-              className="mt-4"
-              disabled={cart.length === 0 || loading}
-              onClick={handleCheckout}
-              loading={loading}
+              className={`rounded-xl ${
+                selectedPayment === 'cash'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-green-50 text-green-700'
+              }`}
+              onClick={() => setSelectedPayment('cash')}
             >
-              Complete Sale (${total.toFixed(2)})
+              💵 Cash
             </Button>
-          </Card>
-        </div>
-      </div>
-      {/* Discount Modal */}
-      {showDiscountModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <Card className="max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-secondary-900 mb-4">Apply Discount</h3>
-            <Input
-              label="Discount Amount"
-              type="number"
-              step="0.01"
-              placeholder="Enter discount amount"
-              value={discountAmount}
-              onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
-            />
-            <div className="flex justify-end gap-3 mt-6">
-              <Button variant="ghost" onClick={() => setShowDiscountModal(false)}>Cancel</Button>
-              <Button onClick={applyDiscount}>Apply</Button>
+            <Button
+              className={`rounded-xl ${
+                selectedPayment === 'card'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-50 text-blue-700'
+              }`}
+              onClick={() => setSelectedPayment('card')}
+            >
+              💳 Card
+            </Button>
+            <Button
+              className={`rounded-xl ${
+                selectedPayment === 'mobile'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-orange-50 text-orange-700'
+              }`}
+              onClick={() => setSelectedPayment('mobile')}
+            >
+              📱 Mobile
+            </Button>
+            <Button
+              className={`rounded-xl ${
+                selectedPayment === 'credit'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-purple-50 text-purple-700'
+              }`}
+              onClick={() => setSelectedPayment('credit')}
+            >
+              📝 Credit
+            </Button>
+          </div>
+
+          {/* Credit Details */}
+          {selectedPayment === 'credit' && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl space-y-3">
+              <Input 
+                label="Customer Name"
+                placeholder="Enter customer name"
+                value={creditCustomer.name}
+                onChange={(e) => 
+                  setCreditCustomer({...creditCustomer, name: e.target.value})}
+               />
+              <Input 
+                label="Phone"
+                placeholder="Enter phone number"
+                value={creditCustomer.phone}
+                onChange={(e) => 
+                  setCreditCustomer({...creditCustomer, phone: e.target.value})}
+               />
+              <Input 
+                label="Email"
+                placeholder="Enter email address"
+                value={creditCustomer.email}
+                onChange={(e) => 
+                  setCreditCustomer({...creditCustomer, email: e.target.value})}
+               />
+              <Input 
+                label="Notes"
+                placeholder="Add payment notes..."
+                value={creditCustomer.notes}
+                onChange={(e) => 
+                  setCreditCustomer({...creditCustomer, notes: e.target.value})}
+               />
+              <Input 
+                label="Expected Payment Date"
+                type="date"
+                value={creditCustomer.expectedPaymentDate}
+                onChange={(e) => 
+                  setCreditCustomer({...creditCustomer, expectedPaymentDate: e.target.value})}
+                />
+              <Button 
+                variant="primary" 
+                fullWidth
+                onClick={handleAddCreditCustomer}
+                >
+                Add Credit Customer
+              </Button>
             </div>
-          </Card>
-        </div>
-      )}
+          )}
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-3 gap-2 mt-5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowDiscountModal(true)}
+              className="rounded-xl"
+            >
+              Apply Discount
+            </Button>
+            <Button variant="secondary" size="sm" className="rounded-xl">
+              Hold Order
+            </Button>
+            <Button variant="danger" size="sm" className="rounded-xl">
+              Clear Cart
+            </Button>
+          </div>
+
+          {/* Checkout Button */}
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            className="mt-5 rounded-xl text-lg font-semibold shadow-md"
+            disabled={cart.length === 0 || loading}
+            onClick={handleCheckout}
+            loading={loading}
+          >
+            Complete Sale ({currencyFormatter.format(total)})
+          </Button>
+        </Card>
+      </div>
     </div>
-  );
+
+    {/* ===================== */}
+    {/* Discount Modal */}
+    {/* ===================== */}
+    {showDiscountModal && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+        <Card className="max-w-md w-full mx-4 p-6 rounded-2xl">
+          <h3 className="text-lg font-bold text-slate-800 mb-4">
+            Apply Discount
+          </h3>
+          <Input
+            label="Discount Amount"
+            type="number"
+            step="0.01"
+            placeholder="Enter discount amount"
+            value={discountAmount}
+            onChange={(e) =>
+              setDiscountAmount(parseFloat(e.target.value) || 0)
+            }
+          />
+          <div className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="ghost"
+              onClick={() => setShowDiscountModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={applyDiscount}>Apply</Button>
+          </div>
+        </Card>
+      </div>
+    )}
+  </div>
+);
 };
